@@ -1,0 +1,37 @@
+# 데이터 관리를 위한 클래스
+class ProductRecommender:
+    # 생성자: 클래스가 초기화될 때 호출됨
+    def __init__(self):
+        self.table_names = ['star', 'mainstream', 'highend', 'flagship']  # 사용할 데이터베이스 테이블 이름 리스트
+        self.current_table = 'mainstream'  # 기본 테이블을 'mainstream'으로 설정
+        self.load_products()  # 초기화 시 제품 데이터를 로드
+
+    # 카테고리 분류 및 TF-IDF 행렬 생성 ( TF - IDF 텍스트의 키워드를 기반으로 핵심내용 추출 )
+    def load_products(self):
+        cursor.execute(f"SELECT * FROM {self.current_table}")  # 현재 테이블에서 모든 데이터 선택
+        self.products = pd.DataFrame(cursor.fetchall())  # 데이터를 DataFrame으로 변환
+        self.categories = self.products['카테고리'].unique()  # 카테고리 레이블 리스트 생성
+        self.products['카테고리'] = self.products['카테고리'].fillna('')  # NaN 값을 빈 문자열로 대체
+        self.tfidf = TfidfVectorizer(stop_words='english')  # TF-IDF 벡터라이저 초기화
+        self.tfidf_matrix = self.tfidf.fit_transform(self.products['카테고리'])  # 카테고리 데이터를 TF-IDF 행렬로 변환
+        self.cosine_sim = linear_kernel(self.tfidf_matrix, self.tfidf_matrix)  # 코사인 유사도 행렬 생성
+
+        # => TF-IDF는 정보 검색과 텍스트 마이닝에서 널리 사용되는 가중치 조합 방법 TF-IDF는 단어의 중요도를 평가하여 문서의 특징을 나타내는 데 사용
+        # => 즉 카테고리 리스트를 기준으로 잡고 가는것
+
+    # 테이블 선택 업데이트 및 데이터 로드 ( 프로선수, 방송인 선택영역 )
+    def update_table_selection(self, table_index):
+        self.current_table = self.table_names[table_index]  # 선택된 테이블 이름으로 업데이트
+        self.load_products()  # 새 테이블에서 데이터 로드
+
+    # 제품 추천 로직
+    def get_recommendations(self, category, num_recommendations=8):
+        exact_match_indices = self.products[self.products['카테고리'] == category].index.tolist()  # 정확히 일치하는 카테고리 인덱스 리스트
+        related_indices = self.products[self.products['카테고리'].str.contains(category)].index.tolist()  # 카테고리를 포함하는 인덱스 리스트
+        final_indices = list(dict.fromkeys(exact_match_indices + related_indices))  # 중복 제거 및 인덱스 결합
+        final_indices = final_indices[:num_recommendations]  # 추천 수 제한
+        result = self.products.loc[final_indices][['제품', '설명']]  # 추천 제품과 설명을 포함한 DataFrame 생성
+        return result.to_dict(orient='records')  # 결과를 딕셔너리 형태로 반환
+
+# ProductRecommender 인스턴스 생성
+recommender = ProductRecommender()
